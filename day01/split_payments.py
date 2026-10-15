@@ -1,5 +1,20 @@
-people =[]
-balances={}
+import json
+FILENAME = "split_data.json"
+#savedata
+def save_data():
+    data= {"people":people, "balances":balances}
+    with open(FILENAME, "w") as file:
+        json.dump(data, file,indent=4)
+#loaddata
+def load_data():
+    try:
+        with open(FILENAME,"r") as file:
+            data =json.load(file)
+        return data["people"],data["balances"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return [],{}
+
+people ,balances =load_data()
 
 def add_people():
     name=input("Enter name:").strip().lower()
@@ -11,6 +26,7 @@ def add_people():
         return
     people.append(name)
     balances[name]=0;
+    save_data()
     print("Person Added")
     
 
@@ -61,6 +77,7 @@ def split_expense():
     balances[paid_by]+=amount
     for person in members:
          balances[person]-=share
+    save_data()
     print(f"{expense_name} recorded")
     print(balances)
 

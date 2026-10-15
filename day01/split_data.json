@@ -1,0 +1,16 @@
+{
+    "people": [
+        "arun",
+        "rintu",
+        "hrudya",
+        "edwin",
+        "monica"
+    ],
+    "balances": {
+        "arun": 0.0,
+        "rintu": 150.0,
+        "hrudya": -100.0,
+        "edwin": -50.0,
+        "monica": 0
+    }
+}
