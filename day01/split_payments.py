@@ -22,10 +22,10 @@ def add_people():
          print("Name cannot be empty")
          return
     if name in people:
-        print ("Person already exits")
+        print ("Person already exists")
         return
     people.append(name)
-    balances[name]=0;
+    balances[name]=0
     save_data()
     print("Person Added")
     
@@ -38,7 +38,7 @@ def split_expense():
     expense_name = input("Expense Name: ").strip()
     try:
         amount= float(input("Amount: "))
-    except valueError:
+    except ValueError:
         print("Enter valid amount")
         return
     if amount<=0:
