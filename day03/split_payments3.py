@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import psycopg2
 from dotenv import load_dotenv
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -15,13 +16,8 @@ conn = psycopg2.connect(
 )
 cursor = conn.cursor()
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS people(
-        id       SERIAL PRIMARY KEY,
-        name     TEXT NOT NULL UNIQUE,
-        balance  NUMERIC(12,2) NOT NULL DEFAULT 0
-    )
-""")
+schema_path = Path(__file__).parent / "schema.sql"
+cursor.execute(schema_path.read_text())
 conn.commit()
 
 def add_people():
@@ -39,12 +35,14 @@ def add_people():
     print("Person added!")
 
 def split_expense():
+#load people
     cursor.execute("SELECT name FROM people ORDER BY id")
     names = [row[0] for row in cursor.fetchall()]
+
     if len(names) < 2:
         print("Add at least 2 people first")
         return
-
+#validate the amount
     expense_name = input("Expense Name: ").strip()
     try:
         amount = Decimal(input("Amount: ").strip())
@@ -58,11 +56,12 @@ def split_expense():
     if amount <= 0:
         print("Amount too small")
         return
-
+#who paid
     paid_by = input("Paid by: ").strip().lower()
     if paid_by not in names:
         print("Enter valid person")
         return
+#who shares       
     print("---SPLIT BETWEEN---")
     for i, name in enumerate(names, start=1):
         print(f"{i}. {name}")
@@ -78,6 +77,7 @@ def split_expense():
     if not members:
         print("Nobody selected")
         return
+#calculate th share
     share = (amount / len(members)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     total = share * len(members)
     print(f"Split equally: Rs.{share:.2f} each")
@@ -97,6 +97,20 @@ def split_expense():
             cursor.execute(
                 "UPDATE people SET balance = balance - %s WHERE name = %s",
                 (share, person),
+            )
+
+        cursor.execute(
+            """INSERT INTO expenses (description, amount, paid_by)
+               VALUES (%s, %s, (SELECT id FROM people WHERE name = %s))
+               RETURNING id""",
+            (expense_name, total, paid_by),
+        )
+        expense_id = cursor.fetchone()[0]
+        for person in members:
+            cursor.execute(
+                """INSERT INTO expense_shares (expense_id, person_id, share)
+                   VALUES (%s, (SELECT id FROM people WHERE name = %s), %s)""",
+                (expense_id, person, share),
             )
         conn.commit()
     except psycopg2.Error as e:
@@ -120,6 +134,39 @@ def view_balance():
         else:
             print(f"{name.title()} is settled up")
 
+def list_people():
+    cursor.execute("SELECT id, name FROM people ORDER BY id")
+    rows = cursor.fetchall()
+    if not rows:
+        print("No people yet")
+        return
+    for i, (person_id, name) in enumerate(rows, start=1):
+        print(f"{i}. {name.title()}")
+
+def view_expenses():
+    cursor.execute("""
+        SELECT e.id, e.description, e.amount, p.name, e.created_at
+        FROM expenses e
+        JOIN people p ON p.id = e.paid_by
+        ORDER BY e.id
+    """)
+    expenses = cursor.fetchall()
+    if not expenses:
+        print("No expenses yet")
+        return
+    for exp_id, desc, amount, payer, when in expenses:
+        print(f"\n{desc}: Rs.{amount:.2f} paid by {payer.title()} on {when:%d %b %Y}")
+        cursor.execute("""
+            SELECT p.name, s.share
+            FROM expense_shares s
+            JOIN people p ON p.id = s.person_id
+            WHERE s.expense_id = %s
+            ORDER BY s.id
+        """, (exp_id,))
+        for name, share in cursor.fetchall():
+            print(f"   {name.title()} owes Rs.{share:.2f}")
+
+
 try:
     while True:
         print(f"\n{'=' * 20}")
@@ -128,7 +175,9 @@ try:
         print("\n1. Add people")
         print("2. Split Expense")
         print("3. View Balances")
-        print("4. Exit")
+        print("4. List People")
+        print("5. View Expenses")
+        print("6. Exit")
 
         choice = input("Choose option: ").strip()
         if choice == "1":
@@ -138,6 +187,10 @@ try:
         elif choice == "3":
             view_balance()
         elif choice == "4":
+            list_people()
+        elif choice == "5":
+            view_expenses()
+        elif choice == "6":
             print("Exit")
             break
         else:
